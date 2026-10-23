@@ -1,0 +1,69 @@
+---
+title: "project2_data_exploration"
+format: html
+editor: visual
+---
+
+## Data Exploration
+
+Import some packages
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+```
+
+- First lets import NFL data
+
+```{r}
+nfl_data <- read.csv("data/NFL_2009_2018.csv")
+```
+
+- lets check the structure of the data out
+
+```{r}
+
+str(nfl_data)
+```
+
+- There are many columns so lets try to work with a smaller subset of columns
+
+```{r}
+
+sub_nfl_data <- nfl_data |> select(home_team, 
+                                   away_team,
+                                   yardline_100,
+                                   game_date,
+                                   down,
+                                   time,
+                                   ydstogo,
+                                   play_type,
+                                   pass_length,
+                                   pass_location,
+                                   yards_gained,
+                                   run_location,
+                                   quarter_seconds_remaining,
+                                   side_of_field,
+                                   shotgun,
+                                   )
+sub_nfl_data
+```
+
+- Lets check out some contingency tables
+
+```{r}
+# 2 way contingency table for yards to go and play type
+table(sub_nfl_data$ydstogo, sub_nfl_data$play_type)
+
+# 2 way contingency table for down and play type
+table(sub_nfl_data$down, sub_nfl_data$play_type)
+
+# 2 way contingency table for pass_length and pass_location
+table(sub_nfl_data$pass_length, sub_nfl_data$pass_location)
+
+# 1 way contingency table for play type, run_locaiton, pass_length
+table(sub_nfl_data$play_type)
+table(sub_nfl_data$run_location)
+table(sub_nfl_data$pass_length)
+```
