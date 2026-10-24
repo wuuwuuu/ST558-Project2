@@ -46,6 +46,11 @@ sub_nfl_data <- nfl_data |> select(home_team,
                                    quarter_seconds_remaining,
                                    side_of_field,
                                    shotgun,
+                                   qb_dropback,
+                                   posteam,
+                                   air_yards,
+                                   run_location,
+                                   qb_dropback
                                    )
 sub_nfl_data
 ```
@@ -66,4 +71,178 @@ table(sub_nfl_data$pass_length, sub_nfl_data$pass_location)
 table(sub_nfl_data$play_type)
 table(sub_nfl_data$run_location)
 table(sub_nfl_data$pass_length)
+```
+
+- Lets create some numerical summaries for quantitative variables at levels of categorical variables
+
+```{r}
+
+#summary stats for yards gained from each pass location
+tapply(sub_nfl_data$yards_gained, 
+       sub_nfl_data$pass_location, 
+       function(x) c(
+         mean = mean(x, na.rm = TRUE),
+         median = median(x, na.rm = TRUE),
+         sd = sd(x, na.rm = TRUE)
+       ))
+
+#summary stats for yard line a certain play type is made
+tapply(sub_nfl_data$yardline_100, 
+       sub_nfl_data$play_type,
+       function(x) c(
+         mean = mean(x, na.rm = TRUE),
+         median = median(x, na.rm = TRUE),
+         sd = sd(x, na.rm = TRUE)
+       ))
+#summary stats for yards gained when in shotgun
+tapply(sub_nfl_data$yards_gained,
+       sub_nfl_data$shotgun,
+       function(x) c(
+         mean = mean(x, na.rm = TRUE),
+         median = median(x, na.rm = TRUE),
+         sd = sd(x, na.rm = TRUE)
+       ))
+
+```
+
+- Lets plot some of these variables using different plots/graphs
+
+```{r}
+#First we will make a boxplot for the type of play run depeding on the yards to go for first down
+plot_1 <- sub_nfl_data |>
+  filter(!is.na(down),
+         !is.na(play_type),
+         !is.na(ydstogo)) |> 
+  ggplot(aes(x= play_type,y= ydstogo)) +
+  facet_wrap(~ down) +
+  geom_boxplot(na.rm = TRUE) +
+  labs(x = "Play Type",
+       y = "Yards to go for First Down",
+       title = "Play Type Based on Yards to Go and Down") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+plot_1 
+```
+
+```{r}
+#Create a histogram 
+plot_2 <- sub_nfl_data |>
+  filter(!is.na(yards_gained))|>
+  ggplot(aes(x = yards_gained)) +
+  geom_histogram(bins = 20, 
+                 na.rm = TRUE) +
+  labs(
+    x = "Yards Gained",
+    y = "Frequency",
+    title = "Distribution of Yards Gained on Each down"
+  ) +
+  theme_minimal()
+plot_2
+```
+
+```{r}
+#stacked bar chart
+plot_3 <- sub_nfl_data|>
+  filter(!is.na(down),
+         !is.na(play_type),
+         !is.na(posteam)) |>
+  ggplot(aes(x = down,fill = play_type)) +
+  geom_bar(position = "fill",
+           na.rm = TRUE) +
+  facet_wrap(~posteam)
+  labs(
+    x = "Down",
+    y = "Play Type Proportion",
+    title = "Proportion of Play Type Based on Team and Down"
+  )
+plot_3
+```
+
+```{r}
+#box plot
+plot_4 <- sub_nfl_data |>
+  filter(!is.na(play_type),
+         !is.na(yards_gained),
+         !is.na(down),
+         !is.na(shotgun)) |>
+  ggplot(aes(
+    x = play_type,
+    y = yards_gained,
+    fill = factor(shotgun)
+  )) +
+  geom_boxplot(size = 0.5) +
+  labs(
+    x = "Play Type",
+    y = "Yards Gained",
+    fill = "Shotgun (0 = No, 1 = Yes)"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+  
+plot_4
+```
+
+```{r}
+#Scatter plot
+plot_5 <- sub_nfl_data |>
+  filter(!is.na(air_yards),
+         !is.na(yards_gained),
+         !is.na(pass_location),
+         !is.na(down)) |>
+  ggplot(aes(
+    x = air_yards,
+    y = yards_gained,
+    color = pass_location
+  )) +
+  geom_point(size = 0.3) +
+  facet_wrap(~down) +
+  labs(
+    x = "Air Yards",
+    y = "Yards Gained",
+    title = "Air Yards Gained Based on Down and Pass Location"
+  )
+plot_5
+```
+
+```{r}
+plot_6 <- sub_nfl_data |>
+  filter(
+    !is.na(down),
+    !is.na(ydstogo),
+    !is.na(yards_gained)
+  ) |>
+  mutate(
+    distance_group = cut(
+      ydstogo,
+      breaks = c(0, 2, 5, 10, 20, Inf),
+      labels = c("1-2", "3-5", "6-10", "11-20", "21+"),
+      include.lowest = TRUE
+    )
+  ) |>
+  group_by(down, distance_group) |>
+  summarise(
+    avg_yards = mean(yards_gained, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  ggplot(aes(
+    x = distance_group,
+    y = factor(down),
+    fill = avg_yards
+  )) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(
+    low = "lightblue",
+    high = "darkblue"
+  ) +
+  labs(
+    title = "Average Yards Gained by Down and Distance",
+    x = "Yards to Go",
+    y = "Down",
+    fill = "Avg. Yards"
+  ) +
+  theme_minimal()
+
+plot_6
 ```
