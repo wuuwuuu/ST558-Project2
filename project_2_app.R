@@ -84,10 +84,17 @@ ui <- page_sidebar(
                 selected = "yards_gained"
       
     ),
+    uiOutput("y_slider"),
+    
     selectInput(inputId = "z",
                 label = "Numerical Variable 2",
                 choices = num_choices,
                 selected = "ydstogo"),
+    uiOutput("z_slider"),
+    
+    actionButton("subset",
+                 label = "Apply Filter"),
+    
     checkboxGroupInput(
       inputId = "pass_loc",
       label = "Pass Location",
@@ -102,10 +109,78 @@ ui <- page_sidebar(
       selected = ""
     )
   ),
+  navset_tab(
+    id = "tabs",
+    
+    nav_panel(
+      "About",
+      br(),
+      
+      h3("NFL Data Explorer"),
+      p("This app lets you explore NFL data from the 2009-2018 seasons by allowing
+        the user to subset plays, visualize filtered data, build tables, summaries
+        and plots."),
+      
+      h4("NFL Data"),
+      p("The data consist of play by play data where each play is a row in the table.
+        Some of the columns/variables include play type, yards to go, yards gained,
+        down, pass location, and run location.",
+      a("Data information can be found and downloaded at this link", href= "https://www.kaggle.com/datasets/maxhorowitz/nflplaybyplay2009to2016/data")),
+      h4("How to use the App"),
+      
+      h5("Sidebar Information"),
+      p("The sidebar is used to subset the data by choosing what plays to keep like
+        pass location, shotgun formation, and ranges for two numeric variables. These 
+        filters will only be applied after clicking the apply filter button."),
+      
+      h5("Data Download Tab"),
+      p("The data download tab gives some information about the data being used in the app as well as providing
+        the link to the data for download and further examination."),
+      
+      h5("Data Exploration Tab"),
+      p("The data exploration tab allows the user to view contingency tables, numeric summaries,
+        and plots of the subsetted data."),
+      img(src = "NFL_logo.png", width = 250)
+    ),
+    
+    nav_panel(
+      "Data Download"
+    ),
+    
+    nav_panel(
+      "Data Exploration"
+    )
+  )
 )
-  
+nfl_subset <- eventReactive(input$subset, {
+  nfl_data |>
+    filter (
+      .data[[input$y]] >= input$y_range[1] & .data[[input$y]] <= input$y_range[2],
+      .data[[input$z]] >= input$z_range[1] & .data[[input$z]] <= input$z_range[2],
+      pass_location %in% input$pass_loc,
+      shotgun %in% input$shotgun_filter
+    )
+})
+
 server <- function(input, output, session) {
+  output$y_slider <- renderUI({
+    rng <- range(nfl_data[[input$y]], na.rm = TRUE)
+    sliderInput(inputId = "y_range",
+                label = "Range for Numeric Variable 1",
+                min = rng[1],
+                max = rng[2],
+                value = rng)
+  })
   
+  output$z_slider <- renderUI({
+    rng <- range(nfl_data[[input$z]], na.rm = TRUE)
+    sliderInput(inputId = "z_range",
+                label = "Range for Numeric Variable 2",
+                min = rng[1],
+                max = rng[2],
+                value = rng
+    )
+  })
 }
   
 shinyApp(ui = ui, server =server)
