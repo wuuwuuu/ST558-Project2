@@ -2,6 +2,7 @@ library(shiny)
 library(bslib)
 library(ggplot2)
 library(dplyr)
+library(shinycssloaders)
 
 nfl_data <- read.csv("data/NFL_2009_2018.csv") |> select(home_team, 
                                                          away_team,
@@ -98,15 +99,18 @@ ui <- page_sidebar(
     checkboxGroupInput(
       inputId = "pass_loc",
       label = "Pass Location",
-      choices = c("left", "middle", "right"),
-      selected = ""
+      choices = c("Left" = "left",
+                  "Middle" = "middle", 
+                  "Right" = "right",
+                  "None" = "none"),
+      selected = c("left", "middle", "right", "none")
     ),
     
     checkboxGroupInput(
       inputId = "shotgun_filter",
       label = "Shotgun Formation",
       choices = c("No", "Yes"),
-      selected = ""
+      selected = c("No", "Yes")
     )
   ),
   navset_tab(
@@ -144,25 +148,63 @@ ui <- page_sidebar(
     ),
     
     nav_panel(
-      "Data Download"
+      "Data Download",
+      downloadButton("download_data",
+                     "Download Data"),
+      br(),
+      DT::dataTableOutput("data_table")
     ),
     
     nav_panel(
-      "Data Exploration"
+      "Data Exploration",
+      navset_tab(
+        nav_panel(
+          "Categorial Summaries",
+          layout_columns(
+            col_widths = c(4,4,4),
+            selectInput(
+              "cat1",
+              "Variable 1",
+              choices = cat_choices,
+              selected = "play_type"),
+            selectInput(
+              "cat2",
+              "Variable 2 (optional)",
+              choices = c("None" = "none", cat_choices),
+              selected = ""),
+            radioButtons("bar_pos",
+                         "Bar Style",
+                         choices = c("Stacked" = "stack", "Side by Side" = "dodge"))
+          ),
+          h5("Contingency Table"),
+          tableOutput("cat_table"),
+          br(),
+          h5("Categorical Bar Graph"),
+          withSpinner(plotOutput("cat_plot"))
+        ),
+        nav_panel(
+          "Numerical Sumarries"
+          
+        ),
+        nav_panel(
+          "Categorical and Numerical Summaries"
+          
+        )
+      )
     )
   )
 )
-nfl_subset <- eventReactive(input$subset, {
-  nfl_data |>
-    filter (
-      .data[[input$y]] >= input$y_range[1] & .data[[input$y]] <= input$y_range[2],
-      .data[[input$z]] >= input$z_range[1] & .data[[input$z]] <= input$z_range[2],
-      pass_location %in% input$pass_loc,
-      shotgun %in% input$shotgun_filter
-    )
-})
+
+filter_num <- function(df, var, rng) {
+  data_rng <- range(nfl_data[[var]], na.rm = TRUE)
+  if (data_rng[1] == rng[1] && data_rng[2] == rng[2]) return(df)
+  df |> filter(!is.na(.data[[var]]),
+               .data[[var]] >= rng[1],
+               .data[[var]] <= rng[2])
+}
 
 server <- function(input, output, session) {
+  #Slider for first numeric variable
   output$y_slider <- renderUI({
     rng <- range(nfl_data[[input$y]], na.rm = TRUE)
     sliderInput(inputId = "y_range",
@@ -171,7 +213,7 @@ server <- function(input, output, session) {
                 max = rng[2],
                 value = rng)
   })
-  
+  #Slider for second numeric variable
   output$z_slider <- renderUI({
     rng <- range(nfl_data[[input$z]], na.rm = TRUE)
     sliderInput(inputId = "z_range",
@@ -180,6 +222,85 @@ server <- function(input, output, session) {
                 max = rng[2],
                 value = rng
     )
+  })
+  #check if there are greater than 0 rows after subsetting
+  current_data <- reactive({
+    validate(need(nrow(rv$data) > 0, "No plays are found in these filters"))
+    rv$data
+  })
+  
+  
+  #subset data when button is pressed
+  rv <- reactiveValues(data= nfl_data)
+  observeEvent(input$subset, {
+    filtered_data <- nfl_data |> 
+      filter(pass_location %in% input$pass_loc,
+             shotgun %in% input$shotgun_filter)
+    
+    filtered_data <- filter_num(filtered_data, input$y, input$y_range)
+    filtered_data <- filter_num(filtered_data, input$z, input$z_range)
+    rv$data <- filtered_data
+  })
+  
+  #download data button
+  output$download_data <- downloadHandler(
+    filename = function() {
+      paste("NFL_data",Sys.Date(), '.csv',sep = '')
+    },
+    content = function(file) {
+      write.csv(rv$data, file, row.names = FALSE)
+    }
+  )
+  
+  #Render table for download tab
+  output$data_table <- DT::renderDataTable({
+    DT::datatable(current_data())
+  })
+  
+  #categorical contingency tables
+  output$cat_table <- renderTable({
+    cat_data <- current_data()
+    if (input$cat2 == "none") {
+      cat_display_table <- as.data.frame(table(cat_data[[input$cat1]]))
+      names(cat_display_table) <- c(input$cat1, "Count")
+      cat_display_table
+    } else {
+      cat_display_table <- as.data.frame.matrix(table(cat_data[[input$cat1]],
+                                                      cat_data[[input$cat2]]))
+      cat_display_table <- cbind(rownames(cat_display_table), cat_display_table) |>
+        setNames(c(input$cat1, names(cat_display_table)))
+    }
+  })
+  
+  #bar graphs for categorical variables
+  output$cat_plot <- renderPlot({
+    cat_data <- current_data()
+    if (input$cat2 == "none") {
+      b_plot <- ggplot(cat_data,
+                       aes(x = .data[[input$cat1]])) +
+        geom_bar() +
+        labs(
+          title = paste("Count of plays by ", input$cat1),
+          x = input$cat1,
+          y = "Number of Plays"
+        ) 
+    } 
+    else{
+      b_plot <- ggplot(cat_data,
+                       aes(
+                         x = .data[[input$cat1]],
+                         fill = .data[[input$cat2]]
+                       )) +
+        geom_bar(position = input$bar_pos) +
+        labs(
+          title = paste("Plays by ", input$cat1, "and ", input$cat2),
+          x = input$cat1,
+          y = "Number of Plays",
+          fill = input$cat2
+        )
+      
+    }
+    b_plot
   })
 }
   
