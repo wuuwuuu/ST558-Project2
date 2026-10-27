@@ -135,7 +135,8 @@ ui <- page_sidebar(
       h5("Sidebar Information"),
       p("The sidebar is used to subset the data by choosing what plays to keep like
         pass location, shotgun formation, and ranges for two numeric variables. These 
-        filters will only be applied after clicking the apply filter button."),
+        filters will only be applied after clicking the apply filter button. These filters
+        will be applied to the plots and summaries in the tabs to the right of the sidebar."),
       
       h5("Data Download Tab"),
       p("The data download tab gives some information about the data being used in the app as well as providing
@@ -217,14 +218,14 @@ ui <- page_sidebar(
           "Categorical and Numerical Summaries",
           layout_columns(
             col_widths = c(3,3,3,3),
-            selectInput("rel_num_var",
+            selectInput("rel_num_var_1",
                         "Numeric Variable 1",
                         choices = num_choices,
-                        selected = ""),
+                        selected = "yards_gained"),
             selectInput("rel_num_var_2",
                         "Numeric Variable 2",
                         choices = num_choices,
-                        selected = ""),
+                        selected = "air_yards"),
             selectInput("rel_color",
                         "Color by",
                         choices = c("None" = "none",cat_choices)),
@@ -254,6 +255,7 @@ filter_num <- function(df, var, rng) {
 server <- function(input, output, session) {
   #Slider for first numeric variable
   output$y_slider <- renderUI({
+    req(input$y)
     rng <- range(nfl_data[[input$y]], na.rm = TRUE)
     sliderInput(inputId = "y_range",
                 label = "Range for Numeric Variable 1",
@@ -321,6 +323,7 @@ server <- function(input, output, session) {
   })
   
   #bar graphs for categorical variables
+  
   output$cat_plot <- renderPlot({
     cat_data <- current_data()
     if (input$cat2 == "none") {
@@ -399,14 +402,9 @@ server <- function(input, output, session) {
       }
     } else {
       if (input$group_var == "none") {
-        n_plot <- ggplot(num_data,
-                         aes(
-                           y = .data[[input$num_var]]
-                         )) +
+        n_plot <- ggplot(num_data,aes(y = .data[[input$num_var]])) +
           geom_boxplot(fill = "lightblue") +
-          labs(
-            title = paste("Boxplot of", input$num_var, y = input$num_var)
-          )
+          labs(title = paste("Boxplot of", input$num_var, y = input$num_var))
       }else {
         n_plot <- ggplot(num_data,
                          aes(
@@ -431,7 +429,36 @@ server <- function(input, output, session) {
   })
   
   #Relational plot
-  
+  output$rel_plot <- renderPlot({
+    rel_data <- current_data() |> 
+      filter(!is.na(.data[[input$rel_num_var_1]]) & !is.na(.data[[input$rel_num_var_2]]))
+    validate(need(nrow(rel_data) > 0, "No non-missing values for these two variables"))
+    
+    if (input$rel_plot_type == "scatter") {
+      relation_plot <- ggplot(rel_data, aes(x = .data[[input$rel_num_var_1]], y = .data[[input$rel_num_var_2]]))
+      if (input$rel_color == "none") {
+        relation_plot = relation_plot + geom_point(size = 0.5)
+      } else {
+        relation_plot = relation_plot + geom_point(aes(color = .data[[input$rel_color]]), size = 0.5)
+      }
+      relation_plot = relation_plot + labs(title = paste(input$rel_num_var_1, "vs", input$rel_num_var_2),
+                                     x = input$rel_num_var_1,
+                                     y = input$rel_num_var_2,
+                                     color = input$rel_color)
+    } else {
+      relation_plot <- ggplot(rel_data, aes(x = .data[[input$rel_num_var_1,]],
+                                            y= .data[[input$rel_num_var_2]])) +
+        geom_bin2d(bins = 30) +
+        scale_fill_viridis_c()
+    }
+    if(input$rel_facet != "none") {
+      relation_plot = relation_plot + facet_wrap(input$rel_facet)
+    }
+    relation_plot + labs(title = paste(input$rel_num_var_1, "vs", input$rel_num_var_2),
+                         x = input$rel_num_var_1,
+                         y = input$rel_num_var_2,
+                         color = input$rel_color)
+  })
   
   
 }
