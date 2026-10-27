@@ -183,11 +183,59 @@ ui <- page_sidebar(
           withSpinner(plotOutput("cat_plot"))
         ),
         nav_panel(
-          "Numerical Sumarries"
-          
+          "Numeric Sumaries",
+          layout_columns(
+            col_widths = c(3,3,3,3),
+            selectInput(
+              "num_var",
+              "Numeric Variable",
+              choices = num_choices,
+              selected = "yards_gained"
+            ),
+            selectInput(
+              "group_var",
+              "Grouping Variable",
+              choices = c("None" = "none",cat_choices),
+              selected = "down"
+            ),
+            radioButtons(
+              "num_plot_type",
+              "Plot Type",
+              choices = c("Histogram", "Boxplot")
+            ),
+            checkboxInput(
+              "facet_choice",
+              "Facet By Group",
+              value = FALSE
+            )
+          ),
+          h5("Summary Statistics"),
+          tableOutput("num_table"),
+          withSpinner(plotOutput("num_plot"))
         ),
         nav_panel(
-          "Categorical and Numerical Summaries"
+          "Categorical and Numerical Summaries",
+          layout_columns(
+            col_widths = c(3,3,3,3),
+            selectInput("rel_num_var",
+                        "Numeric Variable 1",
+                        choices = num_choices,
+                        selected = ""),
+            selectInput("rel_num_var_2",
+                        "Numeric Variable 2",
+                        choices = num_choices,
+                        selected = ""),
+            selectInput("rel_color",
+                        "Color by",
+                        choices = c("None" = "none",cat_choices)),
+            selectInput("rel_facet",
+                        "Facet by",
+                        choices = c("None" = "none", cat_choices)),
+          ),
+          radioButtons("rel_plot_type",
+                       "Select Plot Type",
+                       choices = c("Heatmap" = "heat", "Scatter Plot" = "scatter")),
+          withSpinner(plotOutput("rel_plot"))
           
         )
       )
@@ -302,6 +350,90 @@ server <- function(input, output, session) {
     }
     b_plot
   })
+  
+  #Numerical summaries tab
+  output$num_table <- renderTable({
+    #remove na's and load filtered data
+    num_data <- current_data() |> filter(!is.na(.data[[input$num_var]]))
+    if (input$group_var != "none") {
+      num_data <- num_data |> group_by(across(all_of(input$group_var)))
+    }
+    num_data |>
+      summarise(n = n(),
+                mean = mean(.data[[input$num_var]]),
+                median = median(.data[[input$num_var]]),
+                SD = sd(.data[[input$num_var]]),
+                Min = min(.data[[input$num_var]]),
+                Max = max(.data[[input$num_var]])
+    )
+    
+  })
+  
+  #Numerical plot
+  output$num_plot <- renderPlot({
+    num_data <- current_data() |> filter(!is.na(.data[[input$num_var]]))
+    validate(need(nrow(num_data), "This variable has no non-missing values"))
+    if(input$num_plot_type == "Histogram") {
+      if (input$group_var == "none") {
+        n_plot <- ggplot(num_data,
+                         aes(x = .data[[input$num_var]])) +
+          geom_histogram(bins = 30) +
+          labs(
+            title = paste("Distribution of ", input$num_var),
+            x = input$num_var,
+            y = "Number of Plays",
+          )
+      } else {
+        n_plot <- ggplot(num_data,
+                         aes(
+                           x = .data[[input$num_var]],
+                           fill = .data[[input$group_var]]
+                         )) +
+          geom_histogram(bins = 30, position="identity") +
+          labs(
+            title = paste("Distribution of ", input$num_var, " by ", input$group_var),
+            x = input$num_var,
+            y = "Number of Plays",
+            fill = input$group_var
+          )
+      }
+    } else {
+      if (input$group_var == "none") {
+        n_plot <- ggplot(num_data,
+                         aes(
+                           y = .data[[input$num_var]]
+                         )) +
+          geom_boxplot(fill = "lightblue") +
+          labs(
+            title = paste("Boxplot of", input$num_var, y = input$num_var)
+          )
+      }else {
+        n_plot <- ggplot(num_data,
+                         aes(
+                           x = .data[[input$group_var]],
+                           y = .data[[input$num_var]],
+                           fill = .data[[input$group_var]]
+                         )) +
+          geom_boxplot() +
+          labs(
+            title = paste(input$num_var, " by ", input$group_var),
+            x = input$group_var,
+            y = input$num_var,
+            fill = input$group_var
+          )
+      }
+      
+    }
+    if (input$facet_choice && input$group_var != "none") {
+      n_plot <- n_plot+ facet_wrap(input$group_var)
+    }
+    n_plot
+  })
+  
+  #Relational plot
+  
+  
+  
 }
   
 shinyApp(ui = ui, server =server)
