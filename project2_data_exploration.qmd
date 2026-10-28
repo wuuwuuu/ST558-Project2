@@ -218,12 +218,11 @@ plot_6 <- sub_nfl_data |>
     y = air_yards,
   )) +
   geom_bin2d(bins = 30)+
-  facet_wrap(~down)
+  facet_wrap(~down) +
   labs(
-    title = "Average Yards Gained by Down and Distance",
-    x = "Yards to Go",
-    y = "Down",
-    fill = "Avg. Yards"
+    title = "Yards Gained by Air Yards and down",
+    x = "Yards Gained",
+    y = "Air yards",
   ) +
   theme_minimal()
 
