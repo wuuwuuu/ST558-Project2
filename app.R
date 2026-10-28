@@ -3,52 +3,49 @@ library(bslib)
 library(ggplot2)
 library(dplyr)
 library(shinycssloaders)
+library(readr)
 
-nfl_data <- read.csv("data/NFL_2009_2018.csv") |> select(home_team, 
-                                                         away_team,
-                                                         yardline_100,
-                                                         game_date,
-                                                         down,
-                                                         time,
-                                                         ydstogo,
-                                                         play_type,
-                                                         pass_length,
-                                                         pass_location,
-                                                         yards_gained,
-                                                         run_location,
-                                                         quarter_seconds_remaining,
-                                                         side_of_field,
-                                                         shotgun,
-                                                         qb_dropback,
-                                                         posteam,
-                                                         air_yards,
-                                                         run_location) |>
-  mutate(shotgun = factor(shotgun, 
-                          levels = c(0,1),
-                          labels = c("No", "Yes")),
-         qb_dropback = factor(qb_dropback,
-                              levels = c(0,1),
-                              labels = c("No", "Yes")),
-         down = factor(down,
-                       levels = c(1,2,3,4),
-                       labels = c("First", "Second", "Third", "Fourth")
-         ))
+#Columns to keep
+keep_cols <- c("home_team", "away_team", "yardline_100", "game_date", "down",
+               "time", "ydstogo", "play_type", "pass_length", "pass_location",
+               "yards_gained", "run_location", "quarter_seconds_remaining",
+               "side_of_field", "shotgun", "qb_dropback", "posteam", "air_yards")
+#file path
+nfl_file <- "data/NFL_2009_2018.csv"
+nfl_data <- read_csv(nfl_file,
+                     col_select = all_of(keep_cols))|>
+  mutate(
+    shotgun = factor(shotgun,
+                     levels = c(0, 1),
+                     labels = c("No", "Yes")),
+    qb_dropback = factor(qb_dropback,
+                         levels = c(0, 1),
+                         labels = c("No", "Yes")),
+    down = factor(down,
+                  levels = c(1, 2, 3, 4),
+                  labels = c("First", "Second", "Third", "Fourth")),
+    
+    #manipulates NA and empty values to none for sidebar options
+    across(c(play_type, pass_length, pass_location, run_location),
+           ~ ifelse(is.na(.x) | .x == "", "none", .x))
+  )
 #get numeric variables and label them
 numeric_vars <- names(nfl_data[sapply(nfl_data,is.numeric)])
-numeric_vars
+
+#labels for numeric variables
 num_labels <- c(yardline_100 = "Yard Line",
                 ydstogo = "Yards to Go For First",
                 yards_gained = "Yards Gained",
                 quarter_seconds_remaining = "Remaining Seconds in the Quarter",
                 air_yards = "Air Yards")
 
+#get and set names for numeric variables available to chose from
 num_choices <- setNames(
   numeric_vars,
   ifelse(numeric_vars %in% names(num_labels),
          num_labels[numeric_vars],
          numeric_vars)
 )
-num_choices
 
 #get categorical variables and label them
 cat_vars <- names(nfl_data)[sapply(nfl_data, \(x) is.character(x)|| is.factor(x))]
@@ -66,13 +63,17 @@ cat_labels <- c(home_team = "Home Team",
                 qb_dropback = "QB dropback",
                 posteam = "Team with Posession")
 
+#get and set categorical variable names to chose from
 cat_choices <- setNames(
   cat_vars,
   ifelse(cat_vars %in% names(cat_labels),
          cat_labels[cat_vars],
          cat_vars)
 )
+
+#UI section 
 ui <- page_sidebar(
+  #Sidebar for filtering 
   sidebar = sidebar(
     selectInput(inputId = "x",
                 label = "Categorical Variable",
@@ -113,6 +114,8 @@ ui <- page_sidebar(
       selected = c("No", "Yes")
     )
   ),
+  
+  #Main tab that host the different tabs available for use
   navset_tab(
     id = "tabs",
     
@@ -148,6 +151,7 @@ ui <- page_sidebar(
       img(src = "NFL_logo.png", width = 250)
     ),
     
+    #download tab 
     nav_panel(
       "Data Download",
       downloadButton("download_data",
@@ -156,9 +160,12 @@ ui <- page_sidebar(
       DT::dataTableOutput("data_table")
     ),
     
+    #Data exploration tab
     nav_panel(
       "Data Exploration",
       navset_tab(
+        
+        #Categorical summaries subtab
         nav_panel(
           "Categorial Summaries",
           layout_columns(
@@ -189,6 +196,8 @@ ui <- page_sidebar(
           h5("Categorical Bar Graph"),
           withSpinner(plotOutput("cat_plot"))
         ),
+        
+        #Numeric summaries subtab
         nav_panel(
           "Numeric Sumaries",
           layout_columns(
@@ -221,8 +230,10 @@ ui <- page_sidebar(
           tableOutput("num_table"),
           withSpinner(plotOutput("num_plot"))
         ),
+        
+        #Subtab for relational summaries
         nav_panel(
-          "Categorical and Numerical Summaries",
+          "Relational Summaries",
           layout_columns(
             col_widths = c(3,3,3,3),
             selectInput("rel_num_var_1",
@@ -251,6 +262,7 @@ ui <- page_sidebar(
   )
 )
 
+#Used to find ranges for the dynamic slider
 filter_num <- function(df, var, rng) {
   data_rng <- range(nfl_data[[var]], na.rm = TRUE)
   if (data_rng[1] == rng[1] && data_rng[2] == rng[2]) return(df)
@@ -259,6 +271,7 @@ filter_num <- function(df, var, rng) {
                .data[[var]] <= rng[2])
 }
 
+#Server function
 server <- function(input, output, session) {
   #Slider for first numeric variable
   output$y_slider <- renderUI({
@@ -330,7 +343,6 @@ server <- function(input, output, session) {
   })
   
   #bar graphs for categorical variables
-  
   output$cat_plot <- renderPlot({
     cat_data <- current_data()
     if (input$cat2 == "none") {
