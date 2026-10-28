@@ -210,32 +210,15 @@ plot_5
 plot_6 <- sub_nfl_data |>
   filter(
     !is.na(down),
-    !is.na(ydstogo),
+    !is.na(air_yards),
     !is.na(yards_gained)
   ) |>
-  mutate(
-    distance_group = cut(
-      ydstogo,
-      breaks = c(0, 2, 5, 10, 20, Inf),
-      labels = c("1-2", "3-5", "6-10", "11-20", "21+"),
-      include.lowest = TRUE
-    )
-  ) |>
-  group_by(down, distance_group) |>
-  summarise(
-    avg_yards = mean(yards_gained, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
   ggplot(aes(
-    x = distance_group,
-    y = factor(down),
-    fill = avg_yards
+    x = yards_gained,
+    y = air_yards,
   )) +
-  geom_tile(color = "white") +
-  scale_fill_gradient(
-    low = "lightblue",
-    high = "darkblue"
-  ) +
+  geom_bin2d(bins = 30)+
+  facet_wrap(~down)
   labs(
     title = "Average Yards Gained by Down and Distance",
     x = "Yards to Go",
